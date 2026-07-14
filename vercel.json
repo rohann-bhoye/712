@@ -19,15 +19,5 @@
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" }
       ]
     }
-  ],
-  "env": {
-    "MONGODB_URI": "@mongodb-uri",
-    "MONGODB_DB_NAME": "@mongodb-db-name",
-    "JWT_SECRET": "@jwt-secret",
-    "ENCRYPTION_KEY": "@encryption-key",
-    "GITHUB_TOKEN": "@github-token",
-    "SENTRY_DSN": "@sentry-dsn",
-    "CRON_SECRET": "@cron-secret",
-    "NEXT_PUBLIC_APP_VERSION": "0.1.0"
-  }
+
 }
