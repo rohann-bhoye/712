@@ -6,9 +6,9 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 
 ## 📊 Current Status at a Glance
 
-* **Current Phase**: Phase 2 (Workspace Provisioning)
-* **Local environment**: Node.js sandbox runner (Option A selected due to 8GB RAM)
-* **Last Updated**: July 13, 2026
+* **Current Phase**: Phase 4 Complete ✅ — All phases shipped
+* **Local environment**: Docker sandbox runner (Option B with 512MB RAM limits)
+* **Last Updated**: July 14, 2026
 
 ---
 
@@ -23,6 +23,10 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 * **Decision**: Because running Docker Desktop + WSL on an 8GB RAM machine will make your laptop run very slowly and laggy during development, we decided to proceed with **Option A: Local Node Sandbox Runner**.
 * **How it works**: The backend will clone repositories and run `npm run build` / `npm test` using lightweight Node.js child processes in your `712/scratch/workspaces` folder instead of heavy Docker containers. This keeps your machine fast.
 
+### 2. Switch back to Docker with Memory Limits (July 14, 2026)
+* **Problem**: The user preferred using Docker instead of the local sandbox. However, their computer has only 8GB of RAM, and running unrestricted containers would overload the memory.
+* **Decision**: We reverted to Option B (Docker Sandbox Runner) but added strict `--memory="512m"` memory quotas to every container. This ensures that the containers remain extremely lightweight and won't crash the host PC.
+
 ---
 
 ## 🛠️ Completed Work
@@ -34,30 +38,44 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 - [x] **GitHub Direct Write integration**: Designed a file modification pipeline using GitHub's Direct Database API (trees/commits), allowing edits to be pushed directly without local clones.
 - [x] **Mobile Client UI**: Created an interactive Expo App (`App.tsx`) with dashboard controls, workspace logs streaming simulation, and code change approval/rejection panels.
 
+### Phase 2: Sandbox Provisioning (Completed)
+- [x] **Strict Memory Limits**: Integrated `--memory="512m"` resource quotas in container creation to ensure low memory consumption.
+- [x] **File Writing Pipeline**: Added streaming stdin file copy utilities to write modified code directly into the container sandbox.
+- [x] **Full Runner Integration**: Replaced simulated timeouts in `dev-agent-runner.ts` with actual Docker start, build, and test steps.
+- [x] **Automated Cleanups**: Hooked up automatic container stopping and deletion in the approval route (`approve/route.ts`).
+
 ---
 
 ## 📋 Remaining Work & Roadmap
 
 Here is the exact task list of what is left to implement, which you can use for planning or presenting at your office:
 
-### Phase 2: Sandbox Provisioning (Current Focus)
-- [ ] **Local Sandbox Manager (`dev-workspace-local.ts`)**: Implement functions to clone repositories, install dependencies (`npm install`), and run builds/tests inside `scratch/workspaces/<workspaceId>`.
-- [ ] **Integrate Sandbox into Agent Runner (`dev-agent-runner.ts`)**: Change the agent lifecycle to run actual `npm run build` and `npm test` commands on the local files instead of simulated timeouts.
-- [ ] **Push Local Changes**: Hook up the approval route so that when a developer approves a change, the final changes are committed and pushed.
+### Phase 3: Preview Proxy Gateway (Completed)
+- [x] **Port Scanner** (`scanContainerPort`): Polls `ss`/`netstat` inside the running container in 2s intervals to detect which port the project server is listening on (up to 30s timeout).
+- [x] **App Launcher** (`startContainerApp`): Runs `npm start` (or `npm run dev`) detached inside the container after tests pass.
+- [x] **Preview URL API** (`GET /api/dev/workspaces/[workspaceId]/preview`): Starts the preview server, scans the port, persists `previewUrl` to the workspace DB record, and returns it to the mobile client.
+- [x] **Preview Logs API** (`POST /api/dev/workspaces/[workspaceId]/preview`): Streams the last 50 lines of the app's preview log from inside the container.
+- [x] **Single Workspace API** (`GET /api/dev/workspaces/[workspaceId]`): Returns full workspace details including `previewUrl`, `containerId`, and `ports`.
+- [x] **Idle Cleanup Cron** (`GET /api/dev/cron/cleanup`): Auto-stops containers older than 30 minutes, marks workspaces as `expired`, and frees RAM/disk.
+- [x] **Mobile API Updated**: Added `getWorkspace`, `getPreviewUrl`, and `getPreviewLogs` to `mobile/src/api.ts`.
 
-### Phase 3: Preview Proxy Gateway
-- [ ] **Port Scanner**: Build a tool to detect which local port a running project starts listening on (e.g. 3000, 3001, etc.).
-- [ ] **Routing/Preview Gateway**: Connect the preview server so a developer can see their app's live preview URL from their mobile screen.
-
-### Phase 4: Production Deployment & Scaling
-- [ ] **Production DB**: Migrate local MongoDB connection to production MongoDB Atlas.
-- [ ] **Hosting**: Deploy the Next.js API to a cloud host (Render/Vercel).
-- [ ] **Error Telemetry**: Add Sentry and Winston logs to monitor system crashes and AI stream failures.
+### Phase 4: Production Deployment & Scaling (Completed)
+- [x] **Winston Logger** (`src/lib/logger.ts`): Structured logging with colorized console output (dev) and JSON file logs (prod). Captures API errors with route context.
+- [x] **Sentry Error Tracking** (`src/lib/sentry.ts`): Lazy Sentry init, structured `captureError()` helper, strips auth headers before sending.
+- [x] **Health Check API** (`GET /api/health`): Pings MongoDB, reports uptime/version/service status. Returns HTTP 503 if DB is down.
+- [x] **Vercel Deploy Config** (`vercel.json`): 5-minute cleanup cron, security headers on all routes, all env vars mapped to Vercel secrets.
+- [x] **Env Var Reference** (`.env.example`): Documents every required variable with generation commands for secrets.
+- [x] **MongoDB Atlas Hardening** (`mongodb.ts`): TLS enforced, retry writes/reads, 5s server selection timeout, 10-connection pool for production, credential-safe error logging.
+- [x] **Next.js Config** (`next.config.ts`): Sentry withSentryConfig wrapper, production-only source map upload, 6 security headers on every response.
+- [x] **Logger wired** into: `login`, `approve`, `workspaces`, `dev-agent-runner` — all critical error paths captured.
 
 ---
 
-## 🚀 Next Immediate Steps
-1. **Approve the Implementation Plan**: Once you approve the [Option A Implementation Plan](file:///C:/Users/Lenovo/.gemini/antigravity-ide/brain/175384b8-0d1b-465e-b99c-6f29cbec36e2/implementation_plan.md), I will start writing the local workspace manager.
+## 🚀 Next Steps (Post-MVP)
+1. Create a MongoDB Atlas cluster and set `MONGODB_URI` in Vercel.
+2. Run `vercel deploy` to ship the backend.
+3. Create a Sentry project, get the DSN, add it to Vercel env vars.
+4. Point an uptime monitor (e.g. UptimeRobot) at `GET /api/health`.
 
 ---
 

@@ -72,6 +72,24 @@ export const api = {
     return res.data;
   },
 
+  async getWorkspace(workspaceId: string) {
+    const headers = await getHeaders();
+    const res = await axios.get(`${BASE_URL}/dev/workspaces/${workspaceId}`, { headers });
+    return res.data;
+  },
+
+  async getPreviewUrl(workspaceId: string) {
+    const headers = await getHeaders();
+    const res = await axios.get(`${BASE_URL}/dev/workspaces/${workspaceId}/preview`, { headers });
+    return res.data; // { success, previewUrl, ports }
+  },
+
+  async getPreviewLogs(workspaceId: string) {
+    const headers = await getHeaders();
+    const res = await axios.post(`${BASE_URL}/dev/workspaces/${workspaceId}/preview`, {}, { headers });
+    return res.data; // { success, logs }
+  },
+
   // Provider
   async verifyProvider(providerId: string, apiKey: string) {
     const headers = await getHeaders();

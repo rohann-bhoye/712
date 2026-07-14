@@ -4,6 +4,9 @@ import { getJobById, transitionJobState } from '@/lib/dev-agent-job';
 import { connectToDatabase } from '@/lib/mongodb';
 import { pushFilesToGithub } from '@/lib/dev-github';
 import { ObjectId } from 'mongodb';
+import { stopContainer } from '@/lib/dev-workspace-docker';
+import { logApiError } from '@/lib/logger';
+import { captureError } from '@/lib/sentry';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ jobId: string }> | { jobId: string } }) {
   try {
@@ -86,6 +89,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
       commitMessage: finalCommitMsg
     });
 
+    // Clean up container resources
+    try {
+      await stopContainer(job.workspaceId);
+    } catch (err) {
+      console.error('Failed to clean up Docker container sandbox:', err);
+    }
+
     // 6. Insert history record
     await db.collection('dev_history').insertOne({
       userId: session.userId,
@@ -120,6 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
       commitSha
     });
   } catch (error: any) {
+    logApiError('POST /api/dev/agent-jobs/[jobId]/approve', error);
+    captureError(error, { route: 'POST /api/dev/agent-jobs/[jobId]/approve' });
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

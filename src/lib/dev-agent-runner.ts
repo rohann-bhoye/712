@@ -3,6 +3,9 @@ import { getAIResponse } from './dev-ai-adapter';
 import { fetchRepoFileContent } from './dev-github';
 import { connectToDatabase } from './mongodb';
 import { ObjectId } from 'mongodb';
+import { startContainer, runContainerBuild, runContainerTest, writeContainerFile, startContainerApp, scanContainerPort } from './dev-workspace-docker';
+import { logger, logApiError } from './logger';
+import { captureError } from './sentry';
 
 export async function runAgentJob(jobId: string) {
   try {
@@ -13,7 +16,6 @@ export async function runAgentJob(jobId: string) {
     
     // 1. ANALYZING stage
     await transitionJobState(jobId, 'analyzing', 'Analyzing workspace file structure and code files.');
-    await new Promise(r => setTimeout(r, 2000));
 
     // Get workspace details
     const workspace = await db.collection('dev_workspaces').findOne({ _id: new ObjectId(job.workspaceId) });
@@ -25,6 +27,28 @@ export async function runAgentJob(jobId: string) {
     // Get user token
     const user = await db.collection('dev_users').findOne({ _id: new ObjectId(job.userId) });
     const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
+
+    // Start Docker Container Sandbox
+    let containerName = `bucketdev-ws-${job.workspaceId}`;
+    try {
+      await transitionJobState(jobId, 'analyzing', `Provisioning Docker container for: ${workspace.repoFullName}...`);
+      const { containerName: name, port } = await startContainer(
+        job.workspaceId,
+        workspace.repoFullName,
+        workspace.branch || 'main',
+        token
+      );
+      containerName = name;
+      
+      // Update workspace DB with containerId and port
+      await db.collection('dev_workspaces').updateOne(
+        { _id: new ObjectId(job.workspaceId) },
+        { $set: { containerId: containerName, ports: [port], updatedAt: new Date() } }
+      );
+    } catch (e: any) {
+      await transitionJobState(jobId, 'failed', `Docker provisioning failed: ${e.message || e}`);
+      return;
+    }
 
     // 2. PLANNING stage
     await transitionJobState(jobId, 'planning', 'AI is planning files to edit and generating the implementation plan.');
@@ -84,7 +108,12 @@ export async function runAgentJob(jobId: string) {
 
     // 3. EDITING stage
     await transitionJobState(jobId, 'editing', `Applying modifications to file: ${filePath}`);
-    await new Promise(r => setTimeout(r, 2000));
+    try {
+      await writeContainerFile(containerName, filePath, codeContent);
+    } catch (e: any) {
+      await transitionJobState(jobId, 'failed', `Failed to write code changes: ${e.message || e}`);
+      return;
+    }
 
     const diffsObj = {
       [filePath]: codeContent
@@ -95,11 +124,38 @@ export async function runAgentJob(jobId: string) {
     await transitionJobState(jobId, 'building', 'Running project build checks...', {
       diffs: diffsStr
     });
-    await new Promise(r => setTimeout(r, 2000));
+    
+    const buildRes = await runContainerBuild(containerName);
+    if (!buildRes.success) {
+      await transitionJobState(jobId, 'failed', `Build failed:\n${buildRes.log}`);
+      return;
+    }
 
     // 5. TESTING stage
     await transitionJobState(jobId, 'testing', 'Running automated unit test assertions...');
-    await new Promise(r => setTimeout(r, 2000));
+    
+    const testRes = await runContainerTest(containerName);
+    if (!testRes.success) {
+      await transitionJobState(jobId, 'failed', `Tests failed:\n${testRes.log}`);
+      return;
+    }
+
+    // Launch the preview server and detect which port it binds to
+    let previewUrl: string | null = null;
+    try {
+      await startContainerApp(containerName);
+      const internalPort = await scanContainerPort(containerName, 30000);
+      if (internalPort) {
+        previewUrl = `http://localhost:${internalPort}`;
+        // Persist the detected port to the workspace record
+        await db.collection('dev_workspaces').updateOne(
+          { _id: new ObjectId(job.workspaceId) },
+          { $set: { ports: [internalPort], previewUrl, updatedAt: new Date() } }
+        );
+      }
+    } catch {
+      // Preview server is optional — don't fail the job if it can't start
+    }
 
     // 6. REVIEWING stage
     await transitionJobState(jobId, 'reviewing', 'Agent code modifications completed. Awaiting developer approval.', {
@@ -109,7 +165,9 @@ export async function runAgentJob(jobId: string) {
     });
 
   } catch (error: any) {
-    console.error('Error in agent runner:', error);
+    logApiError('runAgentJob', error, { jobId });
+    captureError(error, { route: 'runAgentJob', extra: { jobId } });
+    logger.error('Agent job failed', { jobId, message: error.message });
     await transitionJobState(jobId, 'failed', `Agent execution failed: ${error.message || error}`);
   }
 }

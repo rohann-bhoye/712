@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { generateToken } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
+import { logApiError } from '@/lib/logger';
+import { captureError } from '@/lib/sentry';
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,6 +42,8 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
+    logApiError('POST /api/dev/auth/login', error);
+    captureError(error, { route: 'POST /api/dev/auth/login' });
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

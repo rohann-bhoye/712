@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { logApiError } from '@/lib/logger';
+import { captureError } from '@/lib/sentry';
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,12 +45,17 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (error: any) {
+    logApiError('POST /api/dev/workspaces', error);
+    captureError(error, { route: 'POST /api/dev/workspaces' });
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
+
 }
 
 export async function GET(req: NextRequest) {
+
   try {
+
     const session = getSession(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -75,6 +82,9 @@ export async function GET(req: NextRequest) {
       workspaces: formattedWorkspaces
     });
   } catch (error: any) {
+    logApiError('GET /api/dev/workspaces', error);
+    captureError(error, { route: 'GET /api/dev/workspaces' });
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+
