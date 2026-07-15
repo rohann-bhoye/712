@@ -134,6 +134,13 @@ export const api = {
     return res.data;
   },
 
+  // GitHub PAT Linking
+  async linkGithub(githubToken: string) {
+    const headers = await getHeaders();
+    const res = await axios.post(`${BASE_URL}/dev/github/link`, { githubToken }, { headers });
+    return res.data;
+  },
+
   // History
   async getHistory() {
     const headers = await getHeaders();

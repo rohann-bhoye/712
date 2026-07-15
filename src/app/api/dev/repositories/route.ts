@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { getGithubHeaders } from '@/lib/dev-github';
+import { decrypt } from '@/lib/secrets';
 import axios from 'axios';
 
 export async function GET(req: NextRequest) {
@@ -17,7 +18,14 @@ export async function GET(req: NextRequest) {
 
     const { db } = await connectToDatabase();
     const user = await db.collection('dev_users').findOne({ _id: new ObjectId(session.userId) });
-    const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
+    let token = process.env.GITHUB_TOKEN || '';
+    if (user?.githubToken) {
+      try {
+        token = decrypt(user.githubToken);
+      } catch {
+        token = user.githubToken; // Fallback if not encrypted (legacy)
+      }
+    }
 
     if (!token) {
       return NextResponse.json({ error: 'No GitHub credentials found. Please link your GitHub account.' }, { status: 400 });

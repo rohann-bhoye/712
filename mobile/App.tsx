@@ -35,6 +35,11 @@ export default function App() {
   const [providerKey, setProviderKey] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'openai' | 'gemini'>('gemini');
   const [providerStatus, setProviderStatus] = useState('');
+
+  // GitHub PAT state
+  const [githubPat, setGithubPat] = useState('');
+  const [githubStatus, setGithubStatus] = useState('');
+  const [githubUsername, setGithubUsername] = useState('');
   
   // Workspace / Chat state
   const [activeWorkspace, setActiveWorkspace] = useState<any | null>(null);
@@ -173,6 +178,23 @@ export default function App() {
       }
     } catch (err: any) {
       setProviderStatus(err.response?.data?.error || 'Verification failed.');
+    }
+  };
+
+  const handleLinkGithub = async () => {
+    if (!githubPat.trim()) return;
+    setGithubStatus('Verifying...');
+    try {
+      const res = await api.linkGithub(githubPat);
+      if (res.success) {
+        setGithubStatus(`✅ Linked as @${res.githubUsername}`);
+        setGithubUsername(res.githubUsername);
+        setGithubPat('');
+        // Reload repos now that GitHub is linked
+        loadDashboardData();
+      }
+    } catch (err: any) {
+      setGithubStatus(err.response?.data?.error || 'GitHub verification failed.');
     }
   };
 
@@ -364,6 +386,36 @@ export default function App() {
           <Text style={styles.secondaryButtonText}>Verify & Save Key</Text>
         </TouchableOpacity>
         {providerStatus ? <Text style={styles.statusHelperText}>{providerStatus}</Text> : null}
+      </View>
+
+      {/* GitHub PAT Linking */}
+      <View style={styles.dashboardSection}>
+        <Text style={styles.sectionHeader}>🔗 Link GitHub Account</Text>
+        {githubUsername ? (
+          <View style={[styles.workspaceCard, { backgroundColor: '#064E3B', borderColor: '#10B981' }]}>
+            <Text style={styles.cardTag}>CONNECTED</Text>
+            <Text style={styles.workspaceRepo}>@{githubUsername}</Text>
+            <Text style={styles.workspaceBranch}>Your GitHub repositories are now accessible.</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={{ color: '#9CA3AF', fontSize: 13, marginBottom: 12 }}>
+              Paste your GitHub Personal Access Token (classic) with 'repo' scope to access your repositories.
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              placeholderTextColor="#6B7280"
+              value={githubPat}
+              onChangeText={setGithubPat}
+              secureTextEntry
+            />
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleLinkGithub}>
+              <Text style={styles.secondaryButtonText}>Verify & Link GitHub</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {githubStatus ? <Text style={styles.statusHelperText}>{githubStatus}</Text> : null}
       </View>
 
       {/* Repo Selector / Workspace launcher */}
