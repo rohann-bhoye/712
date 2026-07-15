@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const { db } = await connectToDatabase();
     const user = await db.collection('dev_users').findOne({ _id: new ObjectId(session.userId) });
-    let token = process.env.GITHUB_TOKEN || '';
+    let token = '';
     if (user?.githubToken) {
       try {
         token = decrypt(user.githubToken);
