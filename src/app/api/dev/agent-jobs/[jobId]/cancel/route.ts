@@ -21,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (!['queued', 'analyzing', 'planning', 'editing', 'building', 'testing', 'reviewing'].includes(job.state)) {
+    if (!['queued', 'analyzing', 'planning', 'editing', 'reviewing'].includes(job.state)) {
       return NextResponse.json({ error: 'Job is not in a cancellable state' }, { status: 400 });
     }
 

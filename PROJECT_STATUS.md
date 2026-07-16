@@ -6,9 +6,9 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 
 ## 📊 Current Status at a Glance
 
-* **Current Phase**: Phase 4 Complete ✅ — All phases shipped
-* **Local environment**: Docker sandbox runner (Option B with 512MB RAM limits)
-* **Last Updated**: July 14, 2026
+* **Current Phase**: Pure GitHub-API MVP Pivot Completed ✅
+* **Local environment**: Pure GitHub API edit loop (no Docker/local sandboxing needed)
+* **Last Updated**: July 16, 2026
 
 ---
 
@@ -27,6 +27,10 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 * **Problem**: The user preferred using Docker instead of the local sandbox. However, their computer has only 8GB of RAM, and running unrestricted containers would overload the memory.
 * **Decision**: We reverted to Option B (Docker Sandbox Runner) but added strict `--memory="512m"` memory quotas to every container. This ensures that the containers remain extremely lightweight and won't crash the host PC.
 
+### 3. Pure GitHub API Pivot (July 16, 2026)
+* **Problem**: The Docker containers and sandbox workspace runner shell out to local docker daemon which is not available in Vercel Serverless environment, preventing us from running the backend entirely on the cloud without a laptop.
+* **Decision**: We dropped the Docker sandbox entirely in favor of direct GitHub REST/Data API read/write operations. Edits are prepared inside Next.js API router, verified by the developer on the mobile app via a unified diff patch, and then committed directly to GitHub via the Data API. No Docker daemon is required, which enables backend deployment on Vercel. We also upgraded the mobile app to render colored line diffs and a timeline stepper.
+
 ---
 
 ## 🛠️ Completed Work
@@ -44,38 +48,28 @@ This file is a living document that tracks the progress of the **BucketDev** pro
 - [x] **Full Runner Integration**: Replaced simulated timeouts in `dev-agent-runner.ts` with actual Docker start, build, and test steps.
 - [x] **Automated Cleanups**: Hooked up automatic container stopping and deletion in the approval route (`approve/route.ts`).
 
+### Pure GitHub-API Pivot (Completed)
+- [x] **Remove Docker Engine**: Cleanly deleted workspace sandbox scripts, preview routers, and stop API calls.
+- [x] **Recursive Tree Listing**: Built `fetchRepoTree()` to read repository layouts dynamically.
+- [x] **Multi-File AI Edits & Diffs**: Structured the runner to generate file updates, compute unified patches, and display color-coded inline differences.
+- [x] **Direct Commits**: Wired direct git commit writes to the target branch.
+- [x] **Hardened Security**: Eliminated fallbacks for JWT and decryption keys.
+
 ---
 
 ## 📋 Remaining Work & Roadmap
 
-Here is the exact task list of what is left to implement, which you can use for planning or presenting at your office:
-
-### Phase 3: Preview Proxy Gateway (Completed)
-- [x] **Port Scanner** (`scanContainerPort`): Polls `ss`/`netstat` inside the running container in 2s intervals to detect which port the project server is listening on (up to 30s timeout).
-- [x] **App Launcher** (`startContainerApp`): Runs `npm start` (or `npm run dev`) detached inside the container after tests pass.
-- [x] **Preview URL API** (`GET /api/dev/workspaces/[workspaceId]/preview`): Starts the preview server, scans the port, persists `previewUrl` to the workspace DB record, and returns it to the mobile client.
-- [x] **Preview Logs API** (`POST /api/dev/workspaces/[workspaceId]/preview`): Streams the last 50 lines of the app's preview log from inside the container.
-- [x] **Single Workspace API** (`GET /api/dev/workspaces/[workspaceId]`): Returns full workspace details including `previewUrl`, `containerId`, and `ports`.
-- [x] **Idle Cleanup Cron** (`GET /api/dev/cron/cleanup`): Auto-stops containers older than 30 minutes, marks workspaces as `expired`, and frees RAM/disk.
-- [x] **Mobile API Updated**: Added `getWorkspace`, `getPreviewUrl`, and `getPreviewLogs` to `mobile/src/api.ts`.
-
-### Phase 4: Production Deployment & Scaling (Completed)
-- [x] **Winston Logger** (`src/lib/logger.ts`): Structured logging with colorized console output (dev) and JSON file logs (prod). Captures API errors with route context.
-- [x] **Sentry Error Tracking** (`src/lib/sentry.ts`): Lazy Sentry init, structured `captureError()` helper, strips auth headers before sending.
-- [x] **Health Check API** (`GET /api/health`): Pings MongoDB, reports uptime/version/service status. Returns HTTP 503 if DB is down.
-- [x] **Vercel Deploy Config** (`vercel.json`): 5-minute cleanup cron, security headers on all routes, all env vars mapped to Vercel secrets.
-- [x] **Env Var Reference** (`.env.example`): Documents every required variable with generation commands for secrets.
-- [x] **MongoDB Atlas Hardening** (`mongodb.ts`): TLS enforced, retry writes/reads, 5s server selection timeout, 10-connection pool for production, credential-safe error logging.
-- [x] **Next.js Config** (`next.config.ts`): Sentry withSentryConfig wrapper, production-only source map upload, 6 security headers on every response.
-- [x] **Logger wired** into: `login`, `approve`, `workspaces`, `dev-agent-runner` — all critical error paths captured.
+All planned MVP phases are complete, verified, and successfully pivoted!
 
 ---
 
-## 🚀 Next Steps (Post-MVP)
-1. Create a MongoDB Atlas cluster and set `MONGODB_URI` in Vercel.
-2. Run `vercel deploy` to ship the backend.
-3. Create a Sentry project, get the DSN, add it to Vercel env vars.
-4. Point an uptime monitor (e.g. UptimeRobot) at `GET /api/health`.
+## 🚀 Next Steps (Post-MVP Deployment)
+1. Delete the superseded `mobile_backup/` directory to clean up space.
+2. Create a MongoDB Atlas cluster and set `MONGODB_URI` in Vercel.
+3. Deploy the Next.js backend for real to Vercel via `vercel deploy`.
+4. Point `EXPO_PUBLIC_API_URL` on the mobile client (Expo) to the deployed Vercel API and test end-to-end.
+5. Create a Sentry project, obtain the DSN, and set it up on Vercel environment variables.
+6. Point an uptime monitor (e.g. UptimeRobot) at `GET /api/health`.
 
 ---
 

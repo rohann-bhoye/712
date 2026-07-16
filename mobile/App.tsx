@@ -472,9 +472,56 @@ export default function App() {
     </ScrollView>
   );
 
+  const renderDiffPatch = (diffsJson: string) => {
+    try {
+      if (!diffsJson) return <Text style={styles.diffCode}>No changes generated.</Text>;
+      const filesMap = JSON.parse(diffsJson);
+      return Object.keys(filesMap).map((filePath) => {
+        const fileData = filesMap[filePath];
+        const patch = typeof fileData === 'object' && fileData.patch ? fileData.patch : null;
+        const content = patch || (typeof fileData === 'string' ? fileData : fileData.after || '');
+
+        if (!patch) {
+          return (
+            <View key={filePath} style={{ marginBottom: 15 }}>
+              <Text style={{ color: '#00D8A4', fontWeight: 'bold', fontSize: 13, marginBottom: 5 }}>[MODIFY] {filePath}</Text>
+              <Text style={styles.diffCode}>{content}</Text>
+            </View>
+          );
+        }
+
+        const lines = patch.split('\n');
+        return (
+          <View key={filePath} style={{ marginBottom: 15 }}>
+            <Text style={{ color: '#00D8A4', fontWeight: 'bold', fontSize: 13, marginBottom: 5 }}>{filePath}</Text>
+            {lines.map((line: string, i: number) => {
+              let color = '#E5E7EB';
+              let backgroundColor = 'transparent';
+              if (line.startsWith('+') && !line.startsWith('+++')) {
+                color = '#34D399'; // green
+                backgroundColor = '#064E3B22';
+              } else if (line.startsWith('-') && !line.startsWith('---')) {
+                color = '#F87171'; // red
+                backgroundColor = '#7F1D1D22';
+              } else if (line.startsWith('@@')) {
+                color = '#60A5FA'; // blue
+              }
+              return (
+                <Text key={i} style={[styles.diffCode, { color, backgroundColor, paddingHorizontal: 4 }]}>
+                  {line}
+                </Text>
+              );
+            })}
+          </View>
+        );
+      });
+    } catch (e) {
+      return <Text style={styles.diffCode}>Error parsing diffs.</Text>;
+    }
+  };
+
   const renderChatScreen = () => {
-    // 10-states progress indicator map
-    const states = ['queued', 'analyzing', 'planning', 'editing', 'building', 'testing', 'reviewing', 'pushing', 'completed'];
+    const states = ['queued', 'analyzing', 'planning', 'editing', 'reviewing', 'pushing', 'completed'];
     const activeStateIndex = activeJob ? states.indexOf(activeJob.state) : -1;
 
     return (
@@ -487,31 +534,38 @@ export default function App() {
           <Text style={styles.chatHeaderTitle}>Agent Chat</Text>
         </View>
 
-        {/* Agent Job State Stepper */}
+        {/* Agent Job State Timeline */}
         {activeJob ? (
           <View style={styles.stepperContainer}>
             <View style={styles.stepperHeader}>
               <Text style={styles.stepperStateTitle}>
-                AGENT STATE: <Text style={{ color: '#00D8A4', fontWeight: 'bold' }}>{activeJob.state.toUpperCase()}</Text>
+                AGENT EXECUTION TIMELINE:
               </Text>
-              {['queued', 'analyzing', 'planning', 'editing', 'building', 'testing'].includes(activeJob.state) ? (
+              {['queued', 'analyzing', 'planning', 'editing'].includes(activeJob.state) ? (
                 <TouchableOpacity style={styles.cancelLink} onPress={handleCancelJob}>
                   <Text style={styles.cancelLinkText}>Cancel Run</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
-            {/* Progress line */}
-            <View style={styles.progressLineBg}>
-              <View 
-                style={[
-                  styles.progressLineFill, 
-                  { width: `${((activeStateIndex + 1) / states.length) * 100}%` }
-                ]} 
-              />
-            </View>
-            {/* Latest event message */}
+            
             {activeJob.events && activeJob.events.length > 0 ? (
-              <Text style={styles.stepperMessage}>{activeJob.events[activeJob.events.length - 1].message}</Text>
+              <View style={styles.timelineList}>
+                {activeJob.events.map((event: any, idx: number) => {
+                  const isLast = idx === activeJob.events.length - 1;
+                  return (
+                    <View key={idx} style={styles.timelineRow}>
+                      <View style={[
+                        styles.timelineDot,
+                        isLast ? styles.timelineDotActive : styles.timelineDotSuccess
+                      ]} />
+                      <View style={styles.timelineBody}>
+                        <Text style={styles.timelineStage}>{event.stage.toUpperCase()}</Text>
+                        <Text style={styles.timelineMessage}>{event.message}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -534,15 +588,8 @@ export default function App() {
           <View style={styles.reviewPanel}>
             <Text style={styles.reviewHeader}>🔍 CODE CHANGE REVIEW</Text>
             <ScrollView style={styles.diffScrollView} nestedScrollEnabled>
-              <Text style={styles.diffCode}>
-                {activeJob.diffs ? JSON.stringify(JSON.parse(activeJob.diffs), null, 2) : 'No changes generated.'}
-              </Text>
+              {renderDiffPatch(activeJob.diffs)}
             </ScrollView>
-
-            <View style={styles.gatesRow}>
-              <Text style={styles.gateItem}>Build Check: <Text style={{ color: '#10B981' }}>SUCCESS</Text></Text>
-              <Text style={styles.gateItem}>Test Suite: <Text style={{ color: '#10B981' }}>SUCCESS</Text></Text>
-            </View>
 
             <TextInput
               style={styles.reviewInput}
@@ -1147,5 +1194,40 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: 12,
     fontWeight: 'bold'
+  },
+  timelineList: {
+    marginTop: 8,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#374151',
+    marginTop: 5,
+    marginRight: 10,
+  },
+  timelineDotActive: {
+    backgroundColor: '#00D8A4',
+  },
+  timelineDotSuccess: {
+    backgroundColor: '#10B981',
+  },
+  timelineBody: {
+    flex: 1,
+  },
+  timelineStage: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  timelineMessage: {
+    color: '#FFFFFF',
+    fontSize: 13,
   }
 });

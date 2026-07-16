@@ -4,7 +4,7 @@ import { getJobById, transitionJobState } from '@/lib/dev-agent-job';
 import { connectToDatabase } from '@/lib/mongodb';
 import { pushFilesToGithub } from '@/lib/dev-github';
 import { ObjectId } from 'mongodb';
-import { stopContainer } from '@/lib/dev-workspace-docker';
+import { decrypt } from '@/lib/secrets';
 import { logApiError } from '@/lib/logger';
 import { captureError } from '@/lib/sentry';
 
@@ -46,9 +46,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
       return NextResponse.json({ error: 'Workspace details not found' }, { status: 404 });
     }
 
-    // 3. Fetch token
+    // 3. Fetch token and decrypt if encrypted
     const user = await db.collection('dev_users').findOne({ _id: new ObjectId(job.userId) });
-    const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
+    let token = '';
+    if (user?.githubToken) {
+      try {
+        token = decrypt(user.githubToken);
+      } catch {
+        token = user.githubToken;
+      }
+    } else {
+      token = process.env.GITHUB_TOKEN || '';
+    }
 
     if (!token) {
       await transitionJobState(jobId, 'failed', 'No GitHub credentials found for push.');
@@ -63,10 +72,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
         throw new Error('No files found to commit.');
       }
       const filesMap = JSON.parse(job.diffs);
-      const filesList = Object.keys(filesMap).map(path => ({
-        path,
-        content: filesMap[path]
-      }));
+      const filesList = Object.keys(filesMap).map(path => {
+        const fileData = filesMap[path];
+        const content = typeof fileData === 'object' && fileData.after !== undefined ? fileData.after : fileData;
+        return {
+          path,
+          content
+        };
+      });
 
       const owner = workspace.repoFullName.split('/')[0];
       const repo = workspace.repoFullName.split('/')[1];
@@ -88,13 +101,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
     await transitionJobState(jobId, 'completed', 'Changes merged and pushed successfully.', {
       commitMessage: finalCommitMsg
     });
-
-    // Clean up container resources
-    try {
-      await stopContainer(job.workspaceId);
-    } catch (err) {
-      console.error('Failed to clean up Docker container sandbox:', err);
-    }
 
     // 6. Insert history record
     await db.collection('dev_history').insertOne({

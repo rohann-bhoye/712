@@ -104,3 +104,24 @@ export async function fetchRepoFileContent(
     throw error;
   }
 }
+
+export async function fetchRepoTree(
+  owner: string,
+  repo: string,
+  branch: string,
+  token: string
+): Promise<string[]> {
+  const headers = await getGithubHeaders(token);
+  const baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
+  try {
+    const res = await axios.get(`${baseUrl}/git/trees/${branch}?recursive=1`, { headers });
+    if (res.data && Array.isArray(res.data.tree)) {
+      return res.data.tree
+        .filter((item: any) => item.type === 'blob')
+        .map((item: any) => item.path);
+    }
+    return [];
+  } catch (error) {
+    throw error;
+  }
+}

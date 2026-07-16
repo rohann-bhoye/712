@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'a74d2b99f36c81e5509d3b84f721a8cd36f18ea0c7b94d52184e9c7b0d2358fb'; 
+if (!process.env.ENCRYPTION_KEY) {
+  throw new Error('FATAL: ENCRYPTION_KEY environment variable is not set!');
+}
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 const IV_LENGTH = 12;
 
 export function encrypt(text: string): string {
